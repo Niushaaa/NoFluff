@@ -177,26 +177,128 @@ async function transcribeAudio(audioPath, videoId) {
   throw lastError;
 }
 
+// Helper function to merge short segments into medium-length ones (5-15 seconds)
+function mergeShortSegments(segments) {
+  const TARGET_MIN_DURATION = 4; // Minimum 4 seconds per segment
+  const merged = [];
+  let currentSegment = null;
+  
+  for (const segment of segments) {
+    if (!currentSegment) {
+      // Start new segment
+      currentSegment = {
+        text: segment.text,
+        start: segment.start,
+        end: segment.end,
+        duration: segment.duration
+      };
+    } else if (currentSegment.duration < TARGET_MIN_DURATION) {
+      // Merge with current if too short
+      currentSegment.text += ' ' + segment.text;
+      currentSegment.end = segment.end;
+      currentSegment.duration = currentSegment.end - currentSegment.start;
+    } else {
+      // Current segment is good length, save it and start new one
+      merged.push({
+        text: currentSegment.text,
+        start: currentSegment.start,
+        duration: currentSegment.duration
+      });
+      currentSegment = {
+        text: segment.text,
+        start: segment.start,
+        end: segment.end,
+        duration: segment.duration
+      };
+    }
+  }
+  
+  // Don't forget the last segment
+  if (currentSegment) {
+    merged.push({
+      text: currentSegment.text,
+      start: currentSegment.start,
+      duration: currentSegment.duration
+    });
+  }
+  
+  console.log(`Merged ${segments.length} segments into ${merged.length} medium-length segments`);
+  return merged;
+}
+
 // Helper function for actual transcription attempt
 async function attemptTranscription(audioPath) {
   const fs = require('fs');
   const FormData = require('form-data');
   
-  // Create form data with the audio file
-  const formData = new FormData();
-  formData.append('file', fs.createReadStream(audioPath));
-  formData.append('model', 'whisper-1');
-  formData.append('response_format', 'verbose_json');
+  // Check if audio file exists and has content
+  try {
+    const stats = fs.statSync(audioPath);
+    console.log(`Audio file size: ${stats.size} bytes`);
+    if (stats.size === 0) {
+      throw new Error('Audio file is empty');
+    }
+    if (stats.size < 1000) {
+      throw new Error(`Audio file too small: ${stats.size} bytes`);
+    }
+  } catch (error) {
+    throw new Error(`Audio file issue: ${error.message}`);
+  }
   
-  // Make the API request using fetch
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      ...formData.getHeaders()
-    },
-    body: formData
-  });
+  // Use curl directly since fetch with FormData is having issues
+  const { exec } = require('child_process');
+  const { promisify } = require('util');
+  const execAsync = promisify(exec);
+  
+  const tempResultFile = `./whisper_result_${Date.now()}.json`;
+  
+  // Create a temporary config file for curl to avoid exposing API key in process list
+  const tempConfigFile = `./curl_config_${Date.now()}.txt`;
+  const curlConfig = `
+header = "Authorization: Bearer ${process.env.OPENAI_API_KEY}"
+header = "Content-Type: multipart/form-data"
+form = "file=@${audioPath}"
+form = "model=whisper-1"
+form = "response_format=verbose_json"
+output = "${tempResultFile}"
+silent
+`;
+  
+  fs.writeFileSync(tempConfigFile, curlConfig);
+  
+  const curlCommand = `curl -X POST "https://api.openai.com/v1/audio/transcriptions" --config "${tempConfigFile}"`;
+  
+  console.log('Using secure curl for Whisper API call...');
+  try {
+    await execAsync(curlCommand);
+  } finally {
+    // Clean up config file immediately
+    try { fs.unlinkSync(tempConfigFile); } catch {}
+  }
+  
+  // Read the result
+  const resultText = fs.readFileSync(tempResultFile, 'utf8');
+  fs.unlinkSync(tempResultFile); // Clean up temp file
+  
+  // Check if the result contains an error
+  let apiResult;
+  try {
+    apiResult = JSON.parse(resultText);
+  } catch (parseError) {
+    throw new Error(`Invalid JSON response: ${resultText.substring(0, 200)}...`);
+  }
+  
+  // Check for API errors
+  if (apiResult.error) {
+    throw new Error(`OpenAI API error: ${JSON.stringify(apiResult.error)}`);
+  }
+  
+  // Create a mock response object
+  const response = {
+    ok: true,
+    json: () => apiResult,
+    text: () => resultText
+  };
   
   // Check if response looks like an error
   if (!response.ok) {
@@ -227,12 +329,19 @@ async function attemptTranscription(audioPath) {
   
   // Parse the response - verbose_json gives us segments with timestamps
   if (result.segments && result.segments.length > 0) {
+    // Convert segments to our format first
+    const rawSegments = result.segments.map(seg => ({
+      text: seg.text.trim(),
+      start: seg.start,
+      end: seg.end,
+      duration: seg.end - seg.start
+    }));
+    
+    // Merge short segments into medium-length ones (5-15 seconds)
+    const mergedSegments = mergeShortSegments(rawSegments);
+    
     return {
-      segments: result.segments.map(seg => ({
-        text: seg.text.trim(),
-        start: seg.start,
-        duration: seg.end - seg.start
-      })),
+      segments: mergedSegments,
       language: result.language,
       totalDuration: result.usage?.seconds || 120 // Real duration from Whisper
     };

@@ -47,14 +47,9 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
   };
 
   const handleHighlightSelect = (highlightId: string) => {
-    // TODO: Jump to selected highlight timestamp
+    // Set the current highlight and start playing immediately
     actions.setCurrentHighlight(highlightId);
-    
-    const highlight = state.highlights.find(h => h.id === highlightId);
-    if (highlight) {
-      actions.setCurrentTime(highlight.startTime);
-      actions.setIsPlaying(true);
-    }
+    actions.setIsPlaying(true); // Start playing the selected highlight immediately
   };
 
   const handleIntervalChange = (intervalId: string | null) => {
@@ -87,7 +82,17 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
   };
 
   const handleSeek = (time: number) => {
-    // TODO: Seek to specific time in video
+    // Find which highlight interval contains this time and seek to it
+    const targetInterval = state.highlightIntervals.find(interval => 
+      time >= interval.startTime && time <= interval.endTime
+    );
+    
+    if (targetInterval) {
+      // If the time is within a highlight, select that highlight
+      actions.setCurrentHighlight(targetInterval.id);
+      actions.setIsPlaying(true); // Start playing from the selected highlight
+    }
+    
     actions.setCurrentTime(time);
   };
 
@@ -131,6 +136,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
               highlightIntervals={state.highlightIntervals}
               isPlaying={state.isPlaying}
               currentTime={state.currentTime}
+              selectedHighlight={state.currentHighlight}
               onPlay={handlePlay}
               onPause={handlePause}
               onTimeUpdate={handleTimeUpdate}

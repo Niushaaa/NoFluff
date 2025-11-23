@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack } from 'lucide-react';
 import { VideoData, HighlightInterval } from '../../types';
 import { formatTime } from '../../utils/urlUtils';
@@ -11,6 +11,7 @@ interface VideoPlayerProps {
   highlightIntervals: HighlightInterval[];
   isPlaying: boolean;
   currentTime: number;
+  selectedHighlight?: string | null;
   onPlay: () => void;
   onPause: () => void;
   onTimeUpdate: (time: number) => void;
@@ -23,6 +24,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   highlightIntervals,
   isPlaying,
   currentTime,
+  selectedHighlight,
   onPlay,
   onPause,
   onTimeUpdate,
@@ -54,21 +56,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const [highlightsInitialized, setHighlightsInitialized] = useState(false);
 
-  const handlePlayHighlights = useCallback(async (): Promise<void> => {
-    if (highlightIntervals.length === 0 || !playerReady) {
-      throw new Error('Highlights or player not ready');
-    }
-    
-    onPlay();
-    
-    try {
-      await intervalPlayerRef.current.playHighlightReel();
-    } catch (error) {
-      console.error('Failed to play highlights:', error);
-      onPause();
-      throw error; // Re-throw to allow retry logic
-    }
-  }, [highlightIntervals.length, playerReady, onPlay, onPause]);
 
   useEffect(() => {
     // Initialize highlights only once when ready
@@ -89,22 +76,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       let retryCount = 0;
       const maxRetries = 5;
       
-      const startHighlights = () => {
+      const startHighlights = async () => {
         console.log('Auto-starting highlights...');
-        handlePlayHighlights().catch((error) => {
+        try {
+          // Call onPlay first
+          onPlay();
+          // Start the highlight reel
+          await intervalPlayerRef.current.playHighlightReel();
+        } catch (error) {
+          console.error('Failed to play highlights:', error);
+          onPause();
           retryCount++;
           if (retryCount < maxRetries) {
-            console.log(`Failed to start highlights (attempt ${retryCount}/${maxRetries}), retrying in 1 second...`, error.message);
+            console.log(`Failed to start highlights (attempt ${retryCount}/${maxRetries}), retrying in 1 second...`, error instanceof Error ? error.message : String(error));
             setTimeout(startHighlights, 1000); // Retry after 1 second
           } else {
-            console.error('Failed to start highlights after maximum retries:', error.message);
+            console.error('Failed to start highlights after maximum retries:', error instanceof Error ? error.message : String(error));
           }
-        });
+        }
       };
       
       setTimeout(startHighlights, 1500); // Initial delay
     }
-  }, [highlightIntervals, playerReady, highlightsInitialized, onIntervalChange, handlePlayHighlights]);
+  }, [highlightIntervals, playerReady, highlightsInitialized, onIntervalChange, onPlay, onPause]);
 
   useEffect(() => {
     // Handle video playback state changes
@@ -115,14 +109,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [isPlaying, playerReady]);
 
+  // Handle specific highlight selection (seek to segment and start playing)
+  useEffect(() => {
+    if (selectedHighlight && playerReady) {
+      const targetInterval = highlightIntervals.find(interval => interval.id === selectedHighlight);
+      if (targetInterval) {
+        console.log('Seeking and playing selected highlight:', targetInterval.id);
+        // Set the current interval index and start playing from there
+        const intervalIndex = highlightIntervals.findIndex(interval => interval.id === selectedHighlight);
+        if (intervalIndex !== -1) {
+          intervalPlayerRef.current.seekToIntervalAndPlay(intervalIndex);
+        }
+      }
+    }
+  }, [selectedHighlight, playerReady, highlightIntervals]);
+
   const handlePlayPause = () => {
-    // Always handle highlight mode play/pause
+    // Handle play/pause for sequential highlight playback
     if (intervalPlayerRef.current.isPlaying()) {
+      // Currently playing - pause it
       intervalPlayerRef.current.pauseIntervals();
       onPause();
     } else {
-      intervalPlayerRef.current.resumeIntervals();
-      onPlay();
+      // Not playing - start/resume sequential playback from current position
+      if (highlightIntervals.length > 0) {
+        intervalPlayerRef.current.resumeOrStartFromCurrent();
+        onPlay();
+      }
     }
   };
 
@@ -139,19 +152,54 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // TODO: Seek to clicked position in progress bar
     const progressBar = progressRef.current;
-    if (!progressBar || !videoData) return;
+    if (!progressBar || !selectedHighlight) return;
 
     const rect = progressBar.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const percentage = clickX / rect.width;
-    const newTime = percentage * videoData.duration;
     
-    onSeek(newTime);
+    // Find current highlight and seek within it (like normal video player)
+    const currentInterval = highlightIntervals.find(interval => interval.id === selectedHighlight);
+    if (!currentInterval) return;
+    
+    // Calculate target time within current highlight
+    const highlightDuration = currentInterval.endTime - currentInterval.startTime;
+    const targetTimeInHighlight = percentage * highlightDuration;
+    const actualVideoTime = currentInterval.startTime + targetTimeInHighlight;
+    
+    onSeek(actualVideoTime);
   };
 
-  const progress = videoData ? (currentTime / videoData.duration) * 100 : 0;
+  // Calculate current highlight progress (like a normal video player but for current segment)
+  const getCurrentHighlightProgress = () => {
+    if (!highlightIntervals.length || !selectedHighlight) {
+      return { progress: 0, currentHighlightTime: 0, currentHighlightDuration: 0 };
+    }
+    
+    // Find the currently selected highlight
+    const currentInterval = highlightIntervals.find(interval => interval.id === selectedHighlight);
+    if (!currentInterval) {
+      return { progress: 0, currentHighlightTime: 0, currentHighlightDuration: 0 };
+    }
+    
+    // Calculate time within current highlight (like normal video player seconds)
+    const currentHighlightTime = Math.max(0, Math.min(
+      currentTime - currentInterval.startTime,
+      currentInterval.endTime - currentInterval.startTime
+    ));
+    
+    const currentHighlightDuration = currentInterval.endTime - currentInterval.startTime;
+    const progress = currentHighlightDuration > 0 ? (currentHighlightTime / currentHighlightDuration) * 100 : 0;
+    
+    return {
+      progress: Math.max(0, Math.min(100, progress)),
+      currentHighlightTime,
+      currentHighlightDuration
+    };
+  };
+
+  const { progress, currentHighlightTime, currentHighlightDuration } = getCurrentHighlightProgress();
 
   return (
     <div className="bg-slate-800 rounded-2xl overflow-hidden shadow-2xl w-full">
@@ -246,7 +294,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </button>
             
             <span className="text-lg font-semibold">
-              {formatTime(currentTime)} / {videoData ? formatTime(videoData.duration) : '0:00'}
+              {formatTime(currentHighlightTime)} / {formatTime(currentHighlightDuration)}
             </span>
           </div>
           

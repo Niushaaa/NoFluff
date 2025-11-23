@@ -221,6 +221,13 @@ export class IntervalPlayer {
       }
     }
   }
+
+  resumeOrStartFromCurrent(): void {
+    console.log('Starting/resuming sequential highlight playback from current position');
+    // Start sequential playback from the current interval index
+    this.isPlayingIntervals = true;
+    this.playCurrentInterval();
+  }
   
   skipToNextInterval(): void {
     // Clear current timer first
@@ -271,6 +278,62 @@ export class IntervalPlayer {
       }
     } else {
       console.log('Already at first highlight');
+    }
+  }
+
+  seekToInterval(intervalIndex: number): void {
+    if (intervalIndex < 0 || intervalIndex >= this.intervals.length) {
+      console.error('Invalid interval index:', intervalIndex);
+      return;
+    }
+
+    // Stop current playback and clear timers
+    this.pauseIntervals();
+    
+    // Set the current interval index
+    this.currentIntervalIndex = intervalIndex;
+    const interval = this.intervals[intervalIndex];
+    
+    console.log(`Seeking to highlight ${intervalIndex + 1}/${this.intervals.length}:`, 
+                `${interval.startTime}s - ${interval.endTime}s`);
+    
+    // Seek to the start of the interval but don't play
+    if (this.player && typeof this.player.seekTo === 'function') {
+      this.player.seekTo(interval.startTime, true);
+      // Notify about interval change
+      if (this.onIntervalChangeCallback) {
+        this.onIntervalChangeCallback(interval.id);
+      }
+    }
+  }
+
+  seekToIntervalAndPlay(intervalIndex: number): void {
+    if (intervalIndex < 0 || intervalIndex >= this.intervals.length) {
+      console.error('Invalid interval index:', intervalIndex);
+      return;
+    }
+
+    // Stop current playback and clear timers
+    this.pauseIntervals();
+    
+    // Set the current interval index
+    this.currentIntervalIndex = intervalIndex;
+    const interval = this.intervals[intervalIndex];
+    
+    console.log(`Seeking to and playing highlight ${intervalIndex + 1}/${this.intervals.length}:`, 
+                `${interval.startTime}s - ${interval.endTime}s`);
+    
+    // Seek to the start and start sequential playback from there
+    if (this.player && typeof this.player.seekTo === 'function') {
+      this.player.seekTo(interval.startTime, true);
+      
+      // Start sequential playback from this point
+      this.isPlayingIntervals = true;
+      
+      // Wait for seek to complete then start playing
+      setTimeout(() => {
+        this.playCurrentInterval();
+      }, 200);
     }
   }
   

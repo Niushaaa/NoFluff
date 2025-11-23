@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { HighlightSegment } from '../../types';
 
 interface HighlightTimelineProps {
@@ -12,15 +12,51 @@ export const HighlightTimeline: React.FC<HighlightTimelineProps> = ({
   currentHighlight,
   onHighlightSelect
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeItemRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to keep the active highlight visible
+  useEffect(() => {
+    if (currentHighlight && containerRef.current && activeItemRef.current) {
+      const container = containerRef.current;
+      const activeItem = activeItemRef.current;
+      
+      const containerWidth = container.clientWidth;
+      const containerScrollLeft = container.scrollLeft;
+      
+      const activeItemLeft = activeItem.offsetLeft;
+      const activeItemWidth = activeItem.offsetWidth;
+      const activeItemRight = activeItemLeft + activeItemWidth;
+      
+      // Check if the active item is fully visible
+      const isVisible = activeItemLeft >= containerScrollLeft && 
+                       activeItemRight <= containerScrollLeft + containerWidth;
+      
+      if (!isVisible) {
+        // Calculate scroll position to center the active item
+        const scrollPosition = activeItemLeft - (containerWidth - activeItemWidth) / 2;
+        
+        container.scrollTo({
+          left: Math.max(0, scrollPosition),
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, [currentHighlight]);
   return (
-    <div className="bg-gray-800 rounded-xl p-4 shadow-xl border border-gray-700 overflow-hidden">
-      <div className="flex w-full gap-3 overflow-x-auto scrollbar-hide pb-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+    <div className="bg-gray-800 rounded-xl p-4 shadow-xl border border-gray-700">
+      <div 
+        ref={containerRef}
+        className="flex w-full gap-3 overflow-x-auto scrollbar-hide pb-2" 
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         {highlights.map((highlight, idx) => {
           const isActive = highlight.id === currentHighlight;
           
           return (
             <div
               key={highlight.id}
+              ref={isActive ? activeItemRef : null}
               onClick={() => onHighlightSelect(highlight.id)}
               className={`relative flex-shrink-0 w-24 h-20 rounded-lg cursor-pointer transition-all duration-200 group flex flex-col justify-between p-2 ${
                 isActive 

@@ -23,6 +23,12 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
     actions.setInputUrl(e.target.value);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && state.inputUrl.trim()) {
+      handleSubmit();
+    }
+  };
+
   const handleSubmit = async () => {
     // Validate YouTube URL
     if (!validateYouTubeUrl(state.inputUrl)) {
@@ -90,6 +96,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
               type="text"
               value={state.inputUrl}
               onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
               placeholder="https://youtube.com/watch?v=..."
               className="flex-1 px-6 py-4 border-2 border-gray-600 bg-gray-700 text-gray-100 rounded-2xl focus:border-red-500 focus:outline-none text-lg placeholder-gray-400"
             />
