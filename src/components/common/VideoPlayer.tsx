@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Pause, SkipForward, SkipBack } from 'lucide-react';
 import { VideoData, HighlightInterval } from '../../types';
 import { formatTime } from '../../utils/urlUtils';
@@ -54,6 +54,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const [highlightsInitialized, setHighlightsInitialized] = useState(false);
 
+  const handlePlayHighlights = useCallback(async (): Promise<void> => {
+    if (highlightIntervals.length === 0 || !playerReady) {
+      throw new Error('Highlights or player not ready');
+    }
+    
+    onPlay();
+    
+    try {
+      await intervalPlayerRef.current.playHighlightReel();
+    } catch (error) {
+      console.error('Failed to play highlights:', error);
+      onPause();
+      throw error; // Re-throw to allow retry logic
+    }
+  }, [highlightIntervals.length, playerReady, onPlay, onPause]);
+
   useEffect(() => {
     // Initialize highlights only once when ready
     if (highlightIntervals.length > 0 && playerReady && !highlightsInitialized) {
@@ -88,7 +104,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       
       setTimeout(startHighlights, 1500); // Initial delay
     }
-  }, [highlightIntervals, playerReady, highlightsInitialized, onIntervalChange]);
+  }, [highlightIntervals, playerReady, highlightsInitialized, onIntervalChange, handlePlayHighlights]);
 
   useEffect(() => {
     // Handle video playback state changes
@@ -110,23 +126,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const handlePlayHighlights = async (): Promise<void> => {
-    if (highlightIntervals.length === 0 || !playerReady) {
-      throw new Error('Highlights or player not ready');
-    }
-    
-    onPlay();
-    
-    try {
-      await intervalPlayerRef.current.playHighlightReel();
-    } catch (error) {
-      console.error('Failed to play highlights:', error);
-      onPause();
-      throw error; // Re-throw to allow retry logic
-    }
-  };
-
-
   const handleSkipInterval = (direction: 'next' | 'previous') => {
     // Skip to next/previous highlight interval
     if (direction === 'next') {
@@ -138,10 +137,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     // The interval change will be automatically notified through the callback
   };
 
-  const handleTimeUpdate = () => {
-    // Time updates will be handled by interval player for highlight mode
-    // For now, we'll focus on highlight playback only
-  };
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
     // TODO: Seek to clicked position in progress bar

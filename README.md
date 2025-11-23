@@ -70,7 +70,7 @@ Follow the installation guide at [yt-dlp.github.io](https://github.com/yt-dlp/yt
 2. **Click "Extract Highlights"** - NoFluff will:
    - Download the video's audio using yt-dlp
    - Transcribe it with OpenAI Whisper
-   - Analyze the content with GPT-4o-mini
+   - Analyze the content with GPT-4o-mini (all in one optimized backend call)
    - Extract the most important 20 seconds
 3. **Watch your highlights** with the custom timeline player
 4. **Navigate between segments** using the timeline or player controls

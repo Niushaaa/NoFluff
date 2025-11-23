@@ -23,23 +23,23 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
   useEffect(() => {
     // TODO: Load mock data if no video data exists (for demo)
     if (!state.videoData || state.highlights.length === 0) {
+      const loadMockData = async () => {
+        // TODO: Use actual service to process a mock URL for demo
+        try {
+          const result = await processVideoUrl('https://youtube.com/watch?v=demo');
+          actions.setVideoData(result.videoData);
+          actions.setTranscript(result.transcript);
+          actions.setHighlights(result.highlights);
+          actions.setHighlightIntervals(result.highlightIntervals);
+          actions.setCurrentHighlight(result.highlights[1]?.id || null); // Set second highlight as active
+        } catch (error) {
+          console.error('Failed to load mock data:', error);
+        }
+      };
+      
       loadMockData();
     }
-  }, []);
-
-  const loadMockData = async () => {
-    // TODO: Use actual service to process a mock URL for demo
-    try {
-      const result = await processVideoUrl('https://youtube.com/watch?v=demo');
-      actions.setVideoData(result.videoData);
-      actions.setTranscript(result.transcript);
-      actions.setHighlights(result.highlights);
-      actions.setHighlightIntervals(result.highlightIntervals);
-      actions.setCurrentHighlight(result.highlights[1]?.id || null); // Set second highlight as active
-    } catch (error) {
-      console.error('Failed to load mock data:', error);
-    }
-  };
+  }, [state.highlights.length, state.videoData, actions]);
 
   const handleNewVideo = () => {
     // TODO: Navigate back to input screen

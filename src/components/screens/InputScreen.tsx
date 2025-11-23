@@ -34,37 +34,20 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
     actions.setScreen('processing');
     
     try {
-      // Stage 1: URL Validation (25%)
+      // Stage 1: Initial setup
       actions.setProcessing({
         stage: 'validating',
-        progress: 25,
+        progress: 10,
         message: 'Validating YouTube URL...'
       });
-      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Stage 2: Transcript Fetching (50%) 
-      actions.setProcessing({
-        stage: 'fetching_transcript', 
-        progress: 50,
-        message: 'Downloading audio and generating transcript...'
-      });
-      
-      // Process video URL and extract highlights
-      const result = await processVideoUrl(state.inputUrl);
-      
-      // Stage 3: AI Analysis (75%)
-      actions.setProcessing({
-        stage: 'ai_analysis',
-        progress: 75, 
-        message: 'AI analyzing transcript for highlights...'
-      });
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Stage 4: Complete (100%)
-      actions.setProcessing({
-        stage: 'complete',
-        progress: 100,
-        message: 'Ready to watch highlights!'
+      // Process video URL with real-time progress updates
+      const result = await processVideoUrl(state.inputUrl, (stage, progress, message) => {
+        actions.setProcessing({
+          stage,
+          progress,
+          message
+        });
       });
       
       // Set the results
@@ -81,7 +64,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
       actions.setProcessing({
         stage: 'error',
         progress: 0,
-        message: 'Processing failed. Please try again.'
+        message: `Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
       setTimeout(() => actions.setScreen('input'), 3000);
     }

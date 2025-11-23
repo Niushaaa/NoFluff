@@ -1,6 +1,5 @@
 import { VideoData, HighlightSegment, VideoTranscript, HighlightInterval } from '../types';
-import { fetchYouTubeTranscript, validateTranscript } from './transcriptService';
-import { extractHighlightsFromTranscript } from './aiService';
+import { validateTranscript } from './transcriptService';
 
 export interface VideoProcessingResult {
   videoData: VideoData;
@@ -9,52 +8,51 @@ export interface VideoProcessingResult {
   highlightIntervals: HighlightInterval[];
 }
 
-export const processVideoUrl = async (url: string): Promise<VideoProcessingResult> => {
-  // NEW FLOW:
+export const processVideoUrl = async (
+  url: string,
+  onProgress?: (stage: string, progress: number, message: string) => void
+): Promise<VideoProcessingResult> => {
+  // OPTIMIZED FLOW WITH REAL-TIME PROGRESS:
   // 1. Validate YouTube URL and extract video ID
   // 2. Get video metadata (title, duration, thumbnail) 
-  // 3. Fetch YouTube transcript with timestamps
-  // 4. Validate transcript quality
-  // 5. Use AI to analyze transcript and return highlight intervals
-  // 6. Convert intervals to highlight segments for UI
+  // 3. Process video (transcript + AI analysis) with progress updates
+  // 4. Convert intervals to highlight segments for UI
   
   const videoId = extractVideoId(url);
   
   try {
-    // Step 1: Get basic video metadata  
-    const videoData = await getVideoMetadata(videoId);
+    // Step 1: Process video with real-time progress updates
+    const result = await processVideoBackend(videoId, onProgress);
     
-    // Step 2: Fetch transcript from YouTube (includes real duration)
-    const transcript = await fetchYouTubeTranscript(videoId);
+    // Step 2: Create video metadata from processing result
+    const videoData = {
+      id: videoId,
+      title: `Video ${videoId}`, // Could be enhanced with real title from YouTube API
+      duration: result.transcript.totalDuration || 0,
+      url: `https://youtube.com/watch?v=${videoId}`,
+      thumbnailUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+    };
     
-    // Step 3: Update video duration with real duration from transcript
-    if (transcript.totalDuration) {
-      videoData.duration = transcript.totalDuration;
-    }
-    
-    // Step 4: Validate transcript
-    if (!validateTranscript(transcript)) {
+    // Step 3: Validate transcript
+    if (!validateTranscript(result.transcript)) {
       throw new Error('Video transcript is not available or too short');
     }
     
-    // Step 5: AI analysis to get highlight intervals
-    const highlightIntervals = await extractHighlightsFromTranscript(transcript);
-    
-    // Step 6: If no transcript duration, use sum of highlights as fallback
-    if (!transcript.totalDuration) {
-      const highlightDuration = highlightIntervals.reduce((sum, interval) => 
+    // Step 4: If no transcript duration, use sum of highlights as fallback
+    if (!result.transcript.totalDuration) {
+      const highlightDuration = result.highlightIntervals.reduce((sum, interval) => 
         sum + (interval.endTime - interval.startTime), 0);
       videoData.duration = highlightDuration; // Use highlight sum (could be 0)
     }
     
-    // Step 7: Convert intervals to UI-friendly highlight segments
-    const highlights = convertIntervalsToSegments(highlightIntervals);
+    // Step 5: Convert intervals to UI-friendly highlight segments
+    const highlights = convertIntervalsToSegments(result.highlightIntervals);
     
     return {
       videoData,
-      transcript,
+      transcript: result.transcript,
       highlights,
-      highlightIntervals
+      highlightIntervals: result.highlightIntervals
     };
   } catch (error) {
     throw new Error(`Failed to process video: ${error}`);
@@ -76,29 +74,67 @@ export const extractVideoId = (url: string): string => {
   return match[1];
 };
 
-const getVideoMetadata = async (videoId: string): Promise<VideoData> => {
-  try {
-    // Use our backend API for video metadata
-    const response = await fetch(`http://localhost:3001/api/video/${videoId}`);
+// New combined backend processing function with real-time progress
+const processVideoBackend = async (
+  videoId: string, 
+  onProgress?: (stage: string, progress: number, message: string) => void
+): Promise<{
+  transcript: VideoTranscript;
+  highlightIntervals: HighlightInterval[];
+}> => {
+  return new Promise((resolve, reject) => {
+    const eventSource = new EventSource(`http://localhost:3001/api/process/${videoId}`);
     
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Backend video metadata error:', error);
-    // Fallback to basic data
-    return {
-      id: videoId,
-      title: `Video ${videoId}`,
-      duration: 0, // Will be updated with real duration or highlight sum
-      url: `https://youtube.com/watch?v=${videoId}`,
-      thumbnailUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (onProgress) {
+          onProgress(data.stage, data.progress, data.message);
+        }
+      } catch (error) {
+        console.error('Failed to parse progress data:', error);
+      }
     };
-  }
+    
+    eventSource.addEventListener('complete', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        eventSource.close();
+        
+        resolve({
+          transcript: {
+            segments: data.transcript.segments,
+            language: data.transcript.language || 'en',
+            isAutoGenerated: data.transcript.isAutoGenerated || false,
+            totalDuration: data.transcript.totalDuration
+          },
+          highlightIntervals: data.highlights
+        });
+      } catch (error) {
+        eventSource.close();
+        reject(new Error('Failed to parse completion data'));
+      }
+    });
+    
+    eventSource.addEventListener('error', (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        eventSource.close();
+        reject(new Error(data.error || 'Processing failed'));
+      } catch (error) {
+        eventSource.close();
+        reject(new Error('Video processing failed'));
+      }
+    });
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      eventSource.close();
+      reject(new Error('Connection to processing server failed'));
+    };
+  });
 };
+
 
 const convertIntervalsToSegments = (intervals: HighlightInterval[]): HighlightSegment[] => {
   return intervals.map((interval, index) => {

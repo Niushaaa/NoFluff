@@ -1,23 +1,13 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Scissors } from 'lucide-react';
 import { AppState } from '../../types';
-import { Logo } from '../common/Logo';
 
 interface ProcessingScreenProps {
   state: AppState;
-  actions: {
-    setScreen: (screen: 'input' | 'processing' | 'player' | 'explore') => void;
-    setProcessing: (processing: any) => void;
-  };
 }
 
-export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ state, actions }) => {
+export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({ state }) => {
   // Progress is now controlled by InputScreen during actual processing
-
-  const handleSkipDemo = () => {
-    // TODO: For demo purposes, skip to player
-    actions.setScreen('player');
-  };
 
   return (
     <div className="min-h-screen bg-gray-900 p-8">

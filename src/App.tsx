@@ -14,7 +14,7 @@ function App() {
       case 'input':
         return <InputScreen state={state} actions={actions} />;
       case 'processing':
-        return <ProcessingScreen state={state} actions={actions} />;
+        return <ProcessingScreen state={state} />;
       case 'player':
         return <PlayerScreen state={state} actions={actions} />;
       case 'explore':
