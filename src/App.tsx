@@ -3,7 +3,6 @@ import { useAppState } from './hooks/useAppState';
 import { InputScreen } from './components/screens/InputScreen';
 import { ProcessingScreen } from './components/screens/ProcessingScreen';
 import { PlayerScreen } from './components/screens/PlayerScreen';
-import { ExploreScreen } from './components/screens/ExploreScreen';
 import './App.css';
 
 function App() {
@@ -17,8 +16,6 @@ function App() {
         return <ProcessingScreen state={state} />;
       case 'player':
         return <PlayerScreen state={state} actions={actions} />;
-      case 'explore':
-        return <ExploreScreen state={state} actions={actions} />;
       default:
         return <InputScreen state={state} actions={actions} />;
     }

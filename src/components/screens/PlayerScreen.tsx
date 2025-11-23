@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { Share2 } from 'lucide-react';
 import { AppState } from '../../types';
 import { VideoPlayer } from '../common/VideoPlayer';
 import { HighlightTimeline } from '../common/HighlightTimeline';
@@ -8,7 +7,7 @@ import { processVideoUrl } from '../../services/videoService';
 interface PlayerScreenProps {
   state: AppState;
   actions: {
-    setScreen: (screen: 'input' | 'processing' | 'player' | 'explore') => void;
+    setScreen: (screen: 'input' | 'processing' | 'player') => void;
     setCurrentHighlight: (highlightId: string | null) => void;
     setIsPlaying: (isPlaying: boolean) => void;
     setCurrentTime: (time: number) => void;
@@ -96,27 +95,6 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
     actions.setCurrentTime(time);
   };
 
-  const handleShareHighlight = () => {
-    // TODO: Generate shareable link for highlight reel
-    const shareUrl = `${window.location.origin}/share/${state.videoData?.id}`;
-    
-    if (navigator.share) {
-      navigator.share({
-        title: 'Check out this video highlight!',
-        text: `Highlights from: ${state.videoData?.title}`,
-        url: shareUrl
-      });
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(shareUrl);
-      alert('Share link copied to clipboard!');
-    }
-  };
-
-  const handleExploreMore = () => {
-    // TODO: Navigate to explore screen
-    actions.setScreen('explore');
-  };
 
   return (
     <div className="h-screen bg-gray-900 p-4 overflow-hidden">
@@ -137,6 +115,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
               isPlaying={state.isPlaying}
               currentTime={state.currentTime}
               selectedHighlight={state.currentHighlight}
+              totalHighlightDuration={state.totalHighlightDuration}
               onPlay={handlePlay}
               onPause={handlePause}
               onTimeUpdate={handleTimeUpdate}
@@ -157,24 +136,6 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
           </div>
         </div>
 
-        {/* Action Buttons - Aligned with Video */}
-        <div className="flex-shrink-0 flex justify-center">
-          <div className="max-w-2xl w-full grid grid-cols-2 gap-3">
-            <button 
-              onClick={handleShareHighlight}
-              className="px-6 py-3 bg-gradient-to-br from-red-600 to-red-700 text-white font-bold rounded-xl hover:from-red-700 hover:to-red-800 shadow-xl transition-all flex items-center justify-center gap-2"
-            >
-              <Share2 className="w-5 h-5" />
-              Share Highlight ✨
-            </button>
-            <button
-              onClick={handleExploreMore}
-              className="px-6 py-3 bg-gray-700 text-white font-bold rounded-xl hover:bg-gray-600 shadow-xl transition-all flex items-center justify-center gap-2 border border-gray-600"
-            >
-              Explore More 🔍
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

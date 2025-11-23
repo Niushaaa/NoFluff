@@ -9,12 +9,14 @@ interface InputScreenProps {
   state: AppState;
   actions: {
     setInputUrl: (url: string) => void;
-    setScreen: (screen: 'input' | 'processing' | 'player' | 'explore') => void;
+    setScreen: (screen: 'input' | 'processing' | 'player') => void;
     setProcessing: (processing: any) => void;
     setVideoData: (data: any) => void;
     setTranscript: (transcript: any) => void;
     setHighlights: (highlights: any[]) => void;
     setHighlightIntervals: (intervals: any[]) => void;
+    setCurrentHighlight: (highlightId: string | null) => void;
+    setTotalHighlightDuration: (duration: number) => void;
   };
 }
 
@@ -61,6 +63,12 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
       actions.setTranscript(result.transcript);
       actions.setHighlights(result.highlights);
       actions.setHighlightIntervals(result.highlightIntervals);
+      actions.setTotalHighlightDuration(result.totalHighlightDuration);
+      
+      // Set the first highlight as the initial selection
+      if (result.highlights && result.highlights.length > 0) {
+        actions.setCurrentHighlight(result.highlights[0].id);
+      }
       
       // Navigate to player after brief completion display
       setTimeout(() => actions.setScreen('player'), 1500);

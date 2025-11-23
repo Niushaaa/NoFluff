@@ -12,6 +12,7 @@ const initialState: AppState = {
   currentHighlight: null,
   isPlaying: false,
   currentTime: 0,
+  totalHighlightDuration: 0,
 };
 
 export const useAppState = () => {
@@ -57,6 +58,10 @@ export const useAppState = () => {
     setState(prev => ({ ...prev, currentTime }));
   }, []);
 
+  const setTotalHighlightDuration = useCallback((totalHighlightDuration: number) => {
+    setState(prev => ({ ...prev, totalHighlightDuration }));
+  }, []);
+
   const resetState = useCallback(() => {
     setState(initialState);
   }, []);
@@ -74,6 +79,7 @@ export const useAppState = () => {
       setCurrentHighlight,
       setIsPlaying,
       setCurrentTime,
+      setTotalHighlightDuration,
       resetState,
     },
   };

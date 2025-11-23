@@ -49,8 +49,25 @@ export class IntervalPlayer {
           },
           events: {
             onReady: () => {
-              console.log('YouTube player ready', { videoId });
-              resolve();
+              console.log('YouTube player ready event fired', { videoId });
+              console.log('Player instance at ready:', this.player);
+              console.log('Player methods available at ready:', {
+                seekTo: typeof this.player?.seekTo,
+                playVideo: typeof this.player?.playVideo,
+                pauseVideo: typeof this.player?.pauseVideo,
+                getPlayerState: typeof this.player?.getPlayerState
+              });
+              
+              // Add a small delay to ensure player is fully initialized
+              setTimeout(() => {
+                console.log('Player methods after delay:', {
+                  seekTo: typeof this.player?.seekTo,
+                  playVideo: typeof this.player?.playVideo,
+                  pauseVideo: typeof this.player?.pauseVideo,
+                  getPlayerState: typeof this.player?.getPlayerState
+                });
+                resolve();
+              }, 100);
             },
             onError: (event: any) => {
               console.error('YouTube player error:', event.data);
@@ -79,17 +96,30 @@ export class IntervalPlayer {
   }
   
   private isPlayerReady(): boolean {
-    if (!this.player) return false;
+    if (!this.player) {
+      console.log('isPlayerReady: no player instance');
+      return false;
+    }
     
     try {
       // Check if essential YouTube player methods are available
-      return (
-        typeof this.player.seekTo === 'function' &&
-        typeof this.player.playVideo === 'function' &&
-        typeof this.player.pauseVideo === 'function' &&
-        typeof this.player.getPlayerState === 'function'
-      );
+      const hasSeekTo = typeof this.player.seekTo === 'function';
+      const hasPlayVideo = typeof this.player.playVideo === 'function';
+      const hasPauseVideo = typeof this.player.pauseVideo === 'function';
+      const hasGetPlayerState = typeof this.player.getPlayerState === 'function';
+      
+      console.log('isPlayerReady method checks:', {
+        hasSeekTo,
+        hasPlayVideo,
+        hasPauseVideo,
+        hasGetPlayerState,
+        playerType: typeof this.player,
+        playerConstructor: this.player?.constructor?.name
+      });
+      
+      return hasSeekTo && hasPlayVideo && hasPauseVideo && hasGetPlayerState;
     } catch (error) {
+      console.error('isPlayerReady error:', error);
       return false;
     }
   }
@@ -114,16 +144,26 @@ export class IntervalPlayer {
   }
   
   private async playCurrentInterval(): Promise<void> {
-    if (!this.player || !this.isPlayingIntervals) return;
+    
+    if (!this.player || !this.isPlayingIntervals) {
+      console.error('playCurrentInterval: Player not available or not playing intervals', {
+        hasPlayer: !!this.player,
+        isPlayingIntervals: this.isPlayingIntervals
+      });
+      return;
+    }
+    
+    // Check if player is ready before attempting to play
+    if (!this.isPlayerReady()) {
+      console.error('playCurrentInterval: YouTube player is not ready yet');
+      // Could retry after a delay, but for now just return
+      return;
+    }
     
     const currentInterval = this.intervals[this.currentIntervalIndex];
     if (!currentInterval) {
+      console.log('No more intervals available - stopping playback');
       this.isPlayingIntervals = false;
-      console.log('Finished playing all highlights');
-      // Clear current highlight when finished
-      if (this.onIntervalChangeCallback) {
-        this.onIntervalChangeCallback(null);
-      }
       return;
     }
     
@@ -135,8 +175,8 @@ export class IntervalPlayer {
       this.onIntervalChangeCallback(currentInterval.id);
     }
     
-    // Seek to interval start time and play
-    if (typeof this.player.seekTo === 'function' && typeof this.player.playVideo === 'function') {
+    try {
+      // Seek to interval start time and play
       this.player.seekTo(currentInterval.startTime, true);
       this.player.playVideo();
       
@@ -147,15 +187,42 @@ export class IntervalPlayer {
         console.log(`Playing for ${duration}ms (after ${this.currentIntervalIndex === 0 ? 'initial' : 'seek'} delay)`);
         
         this.intervalTimer = setTimeout(() => {
-          console.log(`Finished playing highlight ${this.currentIntervalIndex + 1}, moving to next immediately`);
+          console.log(`Finished playing highlight ${this.currentIntervalIndex + 1}/${this.intervals.length}`);
           
-          // Move to next interval immediately without pause
+          // Check if this was the last interval BEFORE incrementing
+          const isLastInterval = this.currentIntervalIndex >= this.intervals.length - 1;
+          
+          if (isLastInterval) {
+            console.log('This was the last highlight - stopping playback completely');
+            this.isPlayingIntervals = false;
+            
+            // Pause the video player
+            if (this.player && typeof this.player.pauseVideo === 'function') {
+              try {
+                this.player.pauseVideo();
+                console.log('Successfully paused video after last highlight');
+              } catch (error) {
+                console.warn('Failed to pause video after last highlight:', error);
+              }
+            }
+            
+            // Clear current highlight when finished
+            if (this.onIntervalChangeCallback) {
+              this.onIntervalChangeCallback(null);
+            }
+            
+            // DO NOT increment index or call playCurrentInterval
+            return;
+          }
+          
+          // Only move to next interval if not the last one
           this.currentIntervalIndex++;
+          console.log(`Moving to next highlight: ${this.currentIntervalIndex + 1}/${this.intervals.length}`);
           this.playCurrentInterval();
         }, duration);
       }, this.currentIntervalIndex === 0 ? 500 : 200); // Longer delay for first segment, shorter for subsequent
-    } else {
-      console.error('YouTube player methods not available');
+    } catch (error) {
+      console.error('Error calling YouTube player methods:', error);
       return;
     }
   }
@@ -223,7 +290,20 @@ export class IntervalPlayer {
   }
 
   resumeOrStartFromCurrent(): void {
-    console.log('Starting/resuming sequential highlight playback from current position');
+    console.log('Player ready check:', this.isPlayerReady());
+    console.log('Has player:', !!this.player);
+    console.log('Intervals length:', this.intervals.length);
+    
+    if (!this.isPlayerReady()) {
+      console.error('Cannot start playback - YouTube player not ready');
+      return;
+    }
+    
+    if (this.intervals.length === 0) {
+      console.error('Cannot start playback - no intervals available');
+      return;
+    }
+    
     // Start sequential playback from the current interval index
     this.isPlayingIntervals = true;
     this.playCurrentInterval();
@@ -308,6 +388,7 @@ export class IntervalPlayer {
   }
 
   seekToIntervalAndPlay(intervalIndex: number): void {
+    
     if (intervalIndex < 0 || intervalIndex >= this.intervals.length) {
       console.error('Invalid interval index:', intervalIndex);
       return;
@@ -338,8 +419,11 @@ export class IntervalPlayer {
   }
   
   getCurrentInterval(): HighlightInterval | null {
-    // TODO: Get currently playing interval
     return this.intervals[this.currentIntervalIndex] || null;
+  }
+
+  getPlayer(): any {
+    return this.player;
   }
   
   getProgress(): { current: number; total: number; percentage: number } {

@@ -63,7 +63,9 @@ app.get('/api/process/:videoId', async (req, res) => {
       
       // Step 3: Analyze highlights with AI (90% progress)
       sendProgress('analyzing', 90, 'AI analyzing transcript for best highlights...');
-      const highlights = await analyzeHighlights(transcript);
+      const highlightResult = await analyzeHighlights(transcript);
+      const highlights = highlightResult.highlights;
+      const totalHighlightDuration = highlightResult.totalHighlightDuration;
       
       const end = Date.now();
       console.log(`Full processing completed in ${end - start}ms`);
@@ -89,6 +91,7 @@ app.get('/api/process/:videoId', async (req, res) => {
           totalDuration: transcript.totalDuration
         },
         highlights: highlights,
+        totalHighlightDuration: totalHighlightDuration,
         timing: {
           transcriptTime: transcriptEnd - start,
           totalTime: end - start
@@ -516,7 +519,7 @@ Return a JSON array of highlight segments. Each segment should be:
     console.log(`Total highlight duration: ${totalDuration.toFixed(1)} seconds`);
     console.log('=== END AI HIGHLIGHTS ===\n');
 
-    return highlights;
+    return { highlights, totalHighlightDuration: totalDuration };
 }
 
 

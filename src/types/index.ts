@@ -1,4 +1,4 @@
-export type AppScreen = 'input' | 'processing' | 'player' | 'explore';
+export type AppScreen = 'input' | 'processing' | 'player';
 
 export interface VideoData {
   id: string;
@@ -54,4 +54,5 @@ export interface AppState {
   currentHighlight: string | null;
   isPlaying: boolean;
   currentTime: number;
+  totalHighlightDuration: number;
 }
