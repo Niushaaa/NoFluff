@@ -25,7 +25,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({ state, actions }) =>
       const loadMockData = async () => {
         // TODO: Use actual service to process a mock URL for demo
         try {
-          const result = await processVideoUrl('https://youtube.com/watch?v=demo');
+          const result = await processVideoUrl('https://youtube.com/watch?v=demo', 3);
           actions.setVideoData(result.videoData);
           actions.setTranscript(result.transcript);
           actions.setHighlights(result.highlights);

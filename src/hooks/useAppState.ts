@@ -4,6 +4,7 @@ import { AppState, AppScreen, VideoData, HighlightSegment, ProcessingStatus, Vid
 const initialState: AppState = {
   currentScreen: 'input',
   inputUrl: '',
+  desiredDuration: 3, // Default to 3 minutes
   videoData: null,
   transcript: null,
   highlights: [],
@@ -62,6 +63,10 @@ export const useAppState = () => {
     setState(prev => ({ ...prev, totalHighlightDuration }));
   }, []);
 
+  const setDesiredDuration = useCallback((desiredDuration: number) => {
+    setState(prev => ({ ...prev, desiredDuration }));
+  }, []);
+
   const resetState = useCallback(() => {
     setState(initialState);
   }, []);
@@ -71,6 +76,7 @@ export const useAppState = () => {
     actions: {
       setScreen,
       setInputUrl,
+      setDesiredDuration,
       setVideoData,
       setTranscript,
       setHighlights,

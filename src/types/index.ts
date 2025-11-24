@@ -46,6 +46,7 @@ export interface VideoTranscript {
 export interface AppState {
   currentScreen: AppScreen;
   inputUrl: string;
+  desiredDuration: number; // Target highlights duration in minutes
   videoData: VideoData | null;
   transcript: VideoTranscript | null;
   highlights: HighlightSegment[];

@@ -9,6 +9,7 @@ interface InputScreenProps {
   state: AppState;
   actions: {
     setInputUrl: (url: string) => void;
+    setDesiredDuration: (duration: number) => void;
     setScreen: (screen: 'input' | 'processing' | 'player') => void;
     setProcessing: (processing: any) => void;
     setVideoData: (data: any) => void;
@@ -21,6 +22,8 @@ interface InputScreenProps {
 }
 
 export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
+  const [customDuration, setCustomDuration] = React.useState<string>('');
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     actions.setInputUrl(e.target.value);
   };
@@ -28,6 +31,21 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && state.inputUrl.trim()) {
       handleSubmit();
+    }
+  };
+
+  const handleDurationSelect = (duration: number) => {
+    actions.setDesiredDuration(duration);
+    setCustomDuration(''); // Clear custom input when preset is selected
+  };
+
+  const handleCustomDurationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomDuration(value);
+    
+    if (value && !isNaN(Number(value))) {
+      const duration = Math.max(1, Math.min(60, Number(value))); // Clamp between 1-60 minutes
+      actions.setDesiredDuration(duration);
     }
   };
 
@@ -50,7 +68,7 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
       });
       
       // Process video URL with real-time progress updates
-      const result = await processVideoUrl(state.inputUrl, (stage, progress, message) => {
+      const result = await processVideoUrl(state.inputUrl, state.desiredDuration, (stage: string, progress: number, message: string) => {
         actions.setProcessing({
           stage,
           progress,
@@ -116,6 +134,53 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
               <Scissors className="w-6 h-6" />
               Go! ✨
             </button>
+          </div>
+
+          {/* Duration Selection */}
+          <div className="flex items-center gap-4 my-8 text-gray-400">
+            <div className="flex-1 h-px bg-gray-600"></div>
+            <span className="text-sm">How long should the highlights be?</span>
+            <div className="flex-1 h-px bg-gray-600"></div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Preset Duration Options */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[1, 3, 5, 10].map((duration) => (
+                <button
+                  key={duration}
+                  onClick={() => handleDurationSelect(duration)}
+                  className={`p-4 rounded-2xl border-2 transition-all ${
+                    state.desiredDuration === duration && !customDuration
+                      ? 'border-red-500 bg-red-500/10 text-red-400'
+                      : 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500 hover:bg-gray-650'
+                  }`}
+                >
+                  <div className="text-2xl font-bold">{duration} min</div>
+                  <div className="text-sm opacity-75">
+                    {duration === 1 && 'Quick glance'}
+                    {duration === 3 && 'Key points'}
+                    {duration === 5 && 'Detailed'}
+                    {duration === 10 && 'Comprehensive'}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Duration Input */}
+            <div className="flex items-center gap-3 justify-center">
+              <span className="text-gray-400 text-sm">or custom:</span>
+              <input
+                type="number"
+                value={customDuration}
+                onChange={handleCustomDurationChange}
+                placeholder="Minutes"
+                min="1"
+                max="60"
+                className="w-24 px-3 py-2 bg-gray-700 border-2 border-gray-600 rounded-xl text-white text-center focus:border-red-500 focus:outline-none"
+              />
+              <span className="text-gray-400 text-sm">minutes</span>
+            </div>
           </div>
         </div>
       </div>

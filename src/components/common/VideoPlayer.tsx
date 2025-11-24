@@ -153,9 +153,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (selectedHighlight && playerReady) {
       console.log('selectedHighlight changed to:', selectedHighlight);
       
-      // Check if we're already playing intervals sequentially - if so, don't interfere
-      if (intervalPlayerRef.current.isPlaying()) {
-        console.log('Already playing intervals sequentially - ignoring selectedHighlight change to prevent duplicate playback');
+      // Check if we're already playing intervals sequentially AND this isn't an initial auto-play setup
+      // Only block if we're in the middle of sequential playback to prevent duplicate last highlight issue
+      const currentInterval = intervalPlayerRef.current.getCurrentInterval();
+      if (intervalPlayerRef.current.isPlaying() && currentInterval && currentInterval.id === selectedHighlight) {
+        console.log('Already playing this exact highlight - ignoring selectedHighlight change to prevent duplicate playback');
         return;
       }
       

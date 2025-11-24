@@ -11,6 +11,7 @@ export interface VideoProcessingResult {
 
 export const processVideoUrl = async (
   url: string,
+  desiredDuration: number = 3, // Duration in minutes
   onProgress?: (stage: string, progress: number, message: string) => void
 ): Promise<VideoProcessingResult> => {
   // OPTIMIZED FLOW WITH REAL-TIME PROGRESS:
@@ -23,7 +24,7 @@ export const processVideoUrl = async (
   
   try {
     // Step 1: Process video with real-time progress updates
-    const result = await processVideoBackend(videoId, onProgress);
+    const result = await processVideoBackend(videoId, desiredDuration, onProgress);
     
     // Step 2: Create video metadata from processing result
     const videoData = {
@@ -79,6 +80,7 @@ export const extractVideoId = (url: string): string => {
 // New combined backend processing function with real-time progress
 const processVideoBackend = async (
   videoId: string, 
+  desiredDuration: number,
   onProgress?: (stage: string, progress: number, message: string) => void
 ): Promise<{
   transcript: VideoTranscript;
@@ -86,7 +88,7 @@ const processVideoBackend = async (
   totalHighlightDuration: number;
 }> => {
   return new Promise((resolve, reject) => {
-    const eventSource = new EventSource(`http://localhost:3001/api/process/${videoId}`);
+    const eventSource = new EventSource(`http://localhost:3001/api/process/${videoId}?duration=${desiredDuration}`);
     
     eventSource.onmessage = (event) => {
       try {

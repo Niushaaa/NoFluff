@@ -18,7 +18,8 @@ app.get('/api/health', (req, res) => {
 app.get('/api/process/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
-    console.log(`Processing video: ${videoId}`);
+    const desiredDuration = parseInt(req.query.duration) || 3; // Default to 3 minutes
+    console.log(`Processing video: ${videoId} with desired duration: ${desiredDuration} minutes`);
     
     // Set up SSE headers for real-time progress updates
     res.writeHead(200, {
@@ -63,7 +64,7 @@ app.get('/api/process/:videoId', async (req, res) => {
       
       // Step 3: Analyze highlights with AI (90% progress)
       sendProgress('analyzing', 90, 'AI analyzing transcript for best highlights...');
-      const highlightResult = await analyzeHighlights(transcript);
+      const highlightResult = await analyzeHighlights(transcript, desiredDuration);
       const highlights = highlightResult.highlights;
       const totalHighlightDuration = highlightResult.totalHighlightDuration;
       
@@ -378,7 +379,7 @@ silent
 }
 
 // Helper function to analyze highlights 
-async function analyzeHighlights(transcript) {
+async function analyzeHighlights(transcript, desiredDuration = 3) {
   if (!transcript || !transcript.segments) {
     throw new Error('Invalid transcript data');
   }
@@ -405,31 +406,26 @@ TASK:
 
 Follow these steps precisely:
 
-1. Create Chunks
-	•	Group the transcript into chunks of 10 consecutive segments.
-	•	Keep all segments in original order.
-	•	Each chunk represents ~30 seconds of video.
-
-2. Summarize Each Chunk
-For every chunk, produce:
+1. Summarize Each Segment
+For every segment, produce:
 	•	A one-sentence core message
-	•	A 1 or 2 sentence explanation of why that chunk matters
+	•	A 1 or 2 sentence explanation of why that segment matters
 
 Be concise, but capture meaning and relevance.
 
-3. Find the Video’s Narrative
+2. Find the Video’s Narrative
 
-Using all core messages from the chunks:
+Using all core messages from the segments:
 	•	Identify the video’s central theme, narrative arc, and purpose
 	•	Write a 3–4 sentence explanation summarizing the big picture
 
 This is the message the highlights must preserve.
 
-4. Select Highlight Segments (TOTAL = EXACTLY 20 SECONDS)
+3. VERY IMPORTANT: Select Highlight Segments (TOTAL = EXACTLY ${desiredDuration * 60} SECONDS)
 
 You must:
 	•	Choose individual segments (from the original transcript)
-	•	Choose at most 8 segments
+	•	Choose at most ${Math.max(8, Math.ceil(desiredDuration * 2))} segments
 	•	Select segments that best:
 	•	Express the video’s core message
 	•	Preserve the narrative arc
