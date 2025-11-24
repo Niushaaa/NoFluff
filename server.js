@@ -5,21 +5,90 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security middleware
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://yourdomain.com'] // Replace with your actual domain
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow local development
+  optionsSuccessStatus: 200
+}));
+
+app.use(express.json({ limit: '10mb' })); // Limit request size
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Backend is running!' });
 });
 
+// Input validation functions
+function validateYouTubeVideoId(videoId) {
+  // YouTube video IDs are 11 characters long and contain only alphanumeric characters, underscores, and hyphens
+  // Also ensure it's not just a test string or obvious invalid pattern
+  const youtubeIdRegex = /^[a-zA-Z0-9_-]{11}$/;
+  
+  if (!youtubeIdRegex.test(videoId)) {
+    return false;
+  }
+  
+  // Additional checks for obvious invalid patterns
+  const invalidPatterns = [
+    /^test/i,
+    /^demo/i, 
+    /^invalid/i,
+    /^fake/i,
+    /^sample/i,
+    /123+/,  // Patterns with lots of 123
+    /000+/,  // Patterns with lots of 000
+  ];
+  
+  return !invalidPatterns.some(pattern => pattern.test(videoId));
+}
+
+function validateDuration(duration) {
+  const num = parseInt(duration);
+  return !isNaN(num) && num >= 1 && num <= 60; // 1-60 minutes
+}
+
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return '';
+  // Remove any potentially harmful characters
+  return input.replace(/[<>\"'&]/g, '');
+}
+
 // Download audio, extract transcript, and analyze highlights with real-time progress
 app.get('/api/process/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
-    const desiredDuration = parseInt(req.query.duration) || 3; // Default to 3 minutes
-    console.log(`Processing video: ${videoId} with desired duration: ${desiredDuration} minutes`);
+    const rawDuration = req.query.duration;
+
+    // Validate video ID
+    if (!validateYouTubeVideoId(videoId)) {
+      return res.status(400).json({ 
+        error: 'Invalid video ID format. Must be a valid YouTube video ID.' 
+      });
+    }
+
+    // Validate and sanitize duration
+    let desiredDuration = 3; // Default to 3 minutes
+    if (rawDuration) {
+      if (!validateDuration(rawDuration)) {
+        return res.status(400).json({ 
+          error: 'Invalid duration. Must be between 1 and 60 minutes.' 
+        });
+      }
+      desiredDuration = parseInt(rawDuration);
+    }
+
+    console.log(`Processing video: ${sanitizeInput(videoId)} with desired duration: ${desiredDuration} minutes`);
     
     // Set up SSE headers for real-time progress updates
     res.writeHead(200, {
@@ -103,18 +172,27 @@ app.get('/api/process/:videoId', async (req, res) => {
       res.end();
       
     } catch (error) {
-      console.error('Video processing error:', error);
-      sendProgress('error', 0, `Error: ${error.message}`);
-      res.write(`event: error\ndata: ${JSON.stringify({ error: error.message, videoId })}\n\n`);
+      console.error('Video processing error:', error.message);
+      
+      // Sanitize error message for client
+      let clientError = 'Video processing failed';
+      if (error.message.includes('Video not found') || error.message.includes('unavailable')) {
+        clientError = 'Video not found or unavailable';
+      } else if (error.message.includes('transcription') || error.message.includes('Whisper')) {
+        clientError = 'Failed to transcribe video audio';
+      } else if (error.message.includes('AI analysis') || error.message.includes('OpenAI')) {
+        clientError = 'Failed to analyze video content';
+      }
+      
+      sendProgress('error', 0, clientError);
+      res.write(`event: error\ndata: ${JSON.stringify({ error: clientError, videoId: sanitizeInput(videoId) })}\n\n`);
       res.end();
     }
     
   } catch (error) {
-    console.error('SSE setup error:', error);
+    console.error('SSE setup error:', error.message);
     res.status(500).json({ 
-      error: 'Failed to set up processing stream',
-      message: error.message,
-      videoId: req.params.videoId
+      error: 'Failed to set up processing stream'
     });
   }
 });

@@ -56,6 +56,19 @@ export const InputScreen: React.FC<InputScreenProps> = ({ state, actions }) => {
       return;
     }
 
+    // Validate duration
+    if (state.desiredDuration < 1 || state.desiredDuration > 60) {
+      alert('Duration must be between 1 and 60 minutes');
+      return;
+    }
+
+    // Additional URL format validation
+    const urlPattern = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[a-zA-Z0-9_-]{11}/;
+    if (!urlPattern.test(state.inputUrl.trim())) {
+      alert('Please enter a valid YouTube URL format');
+      return;
+    }
+
     // Start processing with progress tracking
     actions.setScreen('processing');
     
